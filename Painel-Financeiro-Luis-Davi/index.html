@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1220">
+  <title>Painel Financeiro Luis Davi</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><div class="brand-icon" aria-hidden="true">▥</div><div><p class="eyebrow">CONTROLE PESSOAL</p><h1>Painel Financeiro <span>Luis Davi</span></h1></div></div>
+    <div id="cloudStatus" class="cloud-status" role="status"><span></span><strong>Conectando à nuvem</strong></div>
+    <div class="month-control">
+      <label for="monthFilter">Período</label>
+      <select id="monthFilter" aria-label="Filtrar por mês">
+        <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option><option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option><option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+      </select>
+      <select id="yearFilter" aria-label="Filtrar por ano"></select>
+    </div>
+  </header>
+
+  <main>
+    <nav class="view-tabs" aria-label="Áreas do painel">
+      <button class="view-tab active" type="button" data-view="dashboard"><span>⌂</span> Visão geral</button>
+      <button class="view-tab" type="button" data-view="debts"><span>◆</span> Dívidas</button>
+    </nav>
+    <section class="hero dashboard-section">
+      <div><p class="hero-kicker">SEU DINHEIRO, COM CLAREZA</p><h2>Transforme planos em <em>progresso.</em></h2><p>Acompanhe suas movimentações e avance todos os meses rumo às suas metas.</p></div>
+      <div class="hero-art" aria-hidden="true"><i></i><span>R$</span></div>
+    </section>
+
+    <section class="summary-grid dashboard-section" aria-label="Resumo financeiro">
+      <article class="summary-card income-card"><div class="card-icon">↗</div><div><span>Receitas do mês</span><strong id="totalIncome">R$ 0,00</strong></div></article>
+      <article class="summary-card expense-card"><div class="card-icon">↘</div><div><span>Despesas do mês</span><strong id="totalExpense">R$ 0,00</strong></div></article>
+      <article class="summary-card balance-card"><div class="card-icon">=</div><div><span>Saldo do mês</span><strong id="monthBalance">R$ 0,00</strong></div></article>
+      <article class="summary-card goal-card"><div class="card-icon">15</div><div><span>Falta para R$ 15 mil</span><strong id="goal15">R$ 15.000,00</strong></div></article>
+      <article class="summary-card goal-card alt"><div class="card-icon">20</div><div><span>Falta para R$ 20 mil</span><strong id="goal20">R$ 20.000,00</strong></div></article>
+    </section>
+
+    <section class="panel monthly-insights dashboard-section" aria-labelledby="insightsTitle">
+      <div class="insights-header">
+        <div><p class="section-label">RESUMO INTELIGENTE</p><h2 id="insightsTitle">Leitura automática do mês</h2><p id="insightsPeriod">Análise do período selecionado</p></div>
+        <span id="insightsStatus" class="insights-status neutral">Aguardando dados</span>
+      </div>
+      <div class="insights-body">
+        <article class="insight-card variable-insight">
+          <div class="insight-icon" aria-hidden="true">↝</div>
+          <div><span>Gastos variáveis</span><strong id="variableExpenseTotal">R$ 0,00</strong><p id="variableExpenseAlert">Cadastre despesas para receber uma análise automática.</p></div>
+        </article>
+        <article class="insight-card comparison-insight">
+          <div class="insight-icon" aria-hidden="true">≋</div>
+          <div><span>Comparação mensal</span><strong id="monthlyComparison">Sem histórico</strong><p id="monthlyComparisonText">Ainda não há dados do mês anterior para comparar.</p></div>
+        </article>
+        <article class="insight-card target-insight">
+          <div class="insight-icon" aria-hidden="true">◎</div>
+          <div><span>Impacto na meta</span><strong id="targetImpact">0% da meta mínima</strong><p id="targetImpactText">Seu saldo positivo mostrará o avanço rumo às metas.</p></div>
+        </article>
+      </div>
+      <div id="monthlyRecommendation" class="monthly-recommendation"><span aria-hidden="true">✦</span><p><strong>Recomendação do mês:</strong> registre receitas e despesas para gerar uma orientação personalizada.</p></div>
+    </section>
+
+    <section class="content-grid dashboard-section">
+      <article class="panel form-panel">
+        <div class="panel-heading"><div><p class="section-label">NOVO REGISTRO</p><h2>Adicionar lançamento</h2></div><div class="heading-icon">＋</div></div>
+        <form id="transactionForm" novalidate>
+          <fieldset class="type-selector">
+            <legend>Tipo de lançamento</legend>
+            <label class="type-option income-option"><input type="radio" name="type" value="income" checked><span>Receita</span></label>
+            <label class="type-option expense-option"><input type="radio" name="type" value="expense"><span>Despesa</span></label>
+          </fieldset>
+          <div class="form-field"><label for="description">Descrição</label><input type="text" id="description" maxlength="80" placeholder="Ex.: Salário, supermercado..." required></div>
+          <div class="form-row">
+            <div class="form-field"><label for="value">Valor</label><div class="money-input"><span>R$</span><input type="text" id="value" inputmode="decimal" placeholder="0,00" required></div></div>
+            <div class="form-field"><label for="date">Data</label><input type="date" id="date" required></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label for="category">Categoria</label><select id="category" required><option value="">Selecione</option><option>Mercado</option><option>Farmácia</option><option>Combustível</option><option>Família</option><option>João Miguel</option><option>Gaby</option><option>Aluguel</option><option>Babá</option><option>Escola</option><option>Dívidas</option><option>Lazer</option><option>Saúde</option><option>Outros</option></select></div>
+            <div class="form-field"><label for="payment">Forma de pagamento</label><select id="payment" required><option value="">Selecione</option><option>Pix</option><option>Dinheiro</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Transferência</option><option>Boleto</option><option>Outros</option></select></div>
+          </div>
+          <p class="form-message" id="formMessage" role="alert" aria-live="polite"></p>
+          <button class="primary-button" type="submit">＋ Adicionar lançamento</button>
+        </form>
+      </article>
+
+      <article class="panel goal-panel">
+        <div class="panel-heading"><div><p class="section-label">VISÃO DO MÊS</p><h2>Progresso das metas</h2></div><div class="heading-icon target-icon">◎</div></div>
+        <div class="goal-progress"><div class="goal-info"><span>Meta essencial</span><strong>R$ 15.000</strong></div><div class="progress-track"><div id="progress15" class="progress-bar"></div></div><small id="progress15Label">0% alcançado</small></div>
+        <div class="goal-progress second-goal"><div class="goal-info"><span>Meta ideal</span><strong>R$ 20.000</strong></div><div class="progress-track"><div id="progress20" class="progress-bar"></div></div><small id="progress20Label">0% alcançado</small></div>
+        <div class="tip-box"><span>✦</span><p><strong>Foco no saldo positivo.</strong> Cada valor economizado aproxima você das suas metas.</p></div>
+      </article>
+    </section>
+
+    <section class="panel chart-panel dashboard-section">
+      <div class="chart-header">
+        <div><p class="section-label">ANÁLISE DE GASTOS</p><h2>Despesas por categoria</h2><p>Veja onde seu dinheiro foi usado no período selecionado.</p></div>
+        <div class="chart-total"><span>Total analisado</span><strong id="chartTotal">R$ 0,00</strong></div>
+      </div>
+      <div class="chart-content">
+        <div class="chart-canvas-wrap">
+          <canvas id="categoryChart" width="320" height="320" role="img" aria-label="Gráfico de despesas por categoria"></canvas>
+          <div class="chart-center"><span>Despesas</span><strong id="chartCenterTotal">R$ 0</strong></div>
+          <div id="chartEmpty" class="chart-empty"><span>◌</span><strong>Sem despesas</strong><small>Os dados aparecerão aqui</small></div>
+        </div>
+        <div id="chartLegend" class="chart-legend" aria-label="Legenda do gráfico"></div>
+      </div>
+    </section>
+
+    <section class="panel transactions-panel dashboard-section">
+      <div class="transactions-header">
+        <div><p class="section-label">HISTÓRICO</p><h2>Seus lançamentos</h2><p id="transactionCount">Nenhum lançamento neste período</p></div>
+        <div class="table-actions"><label class="filter-search" for="searchInput"><span>⌕</span><input id="searchInput" type="search" placeholder="Buscar lançamento"></label><button id="exportButton" class="secondary-button" type="button">↓ Exportar CSV</button></div>
+      </div>
+      <div class="table-wrapper">
+        <table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Pagamento</th><th>Tipo</th><th class="value-column">Valor</th><th aria-label="Ações"></th></tr></thead><tbody id="transactionList"></tbody></table>
+        <div id="emptyState" class="empty-state"><div>↗</div><h3>Nenhum lançamento por aqui</h3><p>Adicione sua primeira receita ou despesa no formulário acima.</p></div>
+      </div>
+    </section>
+
+    <section id="debtsView" class="debts-view" hidden>
+      <div class="debts-hero">
+        <div><p class="hero-kicker">PLANO DE NEGOCIAÇÃO</p><h2>Organize suas dívidas.<br><em>Recupere sua tranquilidade.</em></h2><p>Priorize acordos, acompanhe pagamentos e veja o saldo diminuir.</p></div>
+        <div class="debts-hero-mark" aria-hidden="true">✓</div>
+      </div>
+
+      <div class="debt-summary-grid">
+        <article class="debt-summary-card"><span>Total em dívidas</span><strong id="debtGrandTotal">R$ 0,00</strong><small>Valor original cadastrado</small></article>
+        <article class="debt-summary-card paid"><span>Total pago</span><strong id="debtPaidTotal">R$ 0,00</strong><small>Progresso acumulado</small></article>
+        <article class="debt-summary-card remaining"><span>Saldo restante</span><strong id="debtRemainingTotal">R$ 0,00</strong><small id="debtProgressText">0% quitado</small></article>
+      </div>
+
+      <div class="debt-layout">
+        <article class="panel debt-form-panel">
+          <div class="panel-heading"><div><p class="section-label">NOVA DÍVIDA</p><h2>Adicionar compromisso</h2></div><div class="heading-icon debt-icon">＋</div></div>
+          <form id="debtForm" novalidate>
+            <div class="form-field"><label for="creditor">Credor</label><input id="creditor" type="text" maxlength="80" placeholder="Ex.: Banco, cartão, pessoa..." required></div>
+            <div class="form-row">
+              <div class="form-field"><label for="debtTotal">Valor total</label><div class="money-input"><span>R$</span><input id="debtTotal" type="text" inputmode="decimal" placeholder="0,00" required></div></div>
+              <div class="form-field"><label for="debtPaid">Valor pago</label><div class="money-input"><span>R$</span><input id="debtPaid" type="text" inputmode="decimal" placeholder="0,00" required></div></div>
+            </div>
+            <div class="form-field"><label for="debtPriority">Prioridade de negociação</label><select id="debtPriority" required><option value="">Selecione</option><option value="high">Alta — negociar primeiro</option><option value="medium">Média — acompanhar</option><option value="low">Baixa — pode aguardar</option></select></div>
+            <div class="debt-preview"><span>Saldo restante estimado</span><strong id="debtPreview">R$ 0,00</strong></div>
+            <p class="form-message" id="debtMessage" role="alert" aria-live="polite"></p>
+            <button class="primary-button debt-button" type="submit">＋ Adicionar dívida</button>
+          </form>
+        </article>
+
+        <article class="panel debt-list-panel">
+          <div class="debt-list-header"><div><p class="section-label">MAPA DE DÍVIDAS</p><h2>Compromissos cadastrados</h2><p id="debtCount">Nenhuma dívida cadastrada</p></div></div>
+          <div id="debtList" class="debt-list"></div>
+          <div id="debtEmpty" class="empty-state"><div>✓</div><h3>Nenhuma dívida cadastrada</h3><p>Use o formulário ao lado para iniciar seu plano de negociação.</p></div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <footer><span>Painel Financeiro Luis Davi</span><span>Seus dados ficam salvos somente neste dispositivo.</span></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
