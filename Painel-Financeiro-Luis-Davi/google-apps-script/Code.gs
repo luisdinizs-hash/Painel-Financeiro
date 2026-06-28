@@ -6,18 +6,62 @@ const TRANSACTION_HEADERS = [
   'formaPagamento', 'criadoEm'
 ];
 const DEBT_HEADERS = [
-  'id', 'credor', 'valorTotal', 'valorPago', 'prioridade', 'criadoEm'
+  'id', 'credor', 'valorTotal', 'valorPago', 'prioridade', 'criadoEm', 'parcelasRestantes'
+];
+
+const AUTOMATION_START = '2026-07-01';
+const WEEKLY_RULES = [
+  { key: 'renda-semanal', type: 'income', description: 'Renda semanal familiar - Luís + Gaby', value: 12000, category: 'Outros', payment: 'Transferência' },
+  { key: 'frutas-semanais', type: 'expense', description: 'Frutas e verduras', value: 200, category: 'Mercado', payment: 'Outros' }
+];
+const MONTHLY_RULES = [
+  { key: 'mercantil-1', day: 1, description: 'Mercantil bairro - 1ª quinzena', value: 400, category: 'Mercado' },
+  { key: 'baba-1', day: 5, description: 'Babá - 1ª quinzena', value: 756, category: 'Babá' },
+  { key: 'faxineira', day: 6, description: 'Faxineira', value: 600, category: 'Outros' },
+  { key: 'cartao-mae', day: 6, description: 'Cartão da mãe (uso pessoal)', value: 600, category: 'Dívidas' },
+  { key: 'cartao-grazy', day: 6, description: 'Cartão Grazy (uso pessoal)', value: 1000, category: 'Dívidas' },
+  { key: 'cartao-jefferson', day: 6, description: 'Cartão Jefferson (uso pessoal)', value: 3000, category: 'Dívidas' },
+  { key: 'agua', day: 10, description: 'Água', value: 200, category: 'Outros' },
+  { key: 'energia', day: 15, description: 'Energia', value: 850, category: 'Outros' },
+  { key: 'plano-joao', day: 15, description: 'Plano de saúde João Miguel', value: 262.65, category: 'Saúde' },
+  { key: 'plano-gaby', day: 15, description: 'Plano de saúde Gaby', value: 315.37, category: 'Saúde' },
+  { key: 'tim', day: 15, description: 'TIM', value: 101.98, category: 'Outros' },
+  { key: 'mercantil-2', day: 16, description: 'Mercantil bairro - 2ª quinzena', value: 400, category: 'Mercado' },
+  { key: 'internet', day: 16, description: 'Internet', value: 130, category: 'Outros' },
+  { key: 'seguro-carro', day: 17, description: 'Seguro do carro', value: 558.79, category: 'Outros' },
+  { key: 'aluguel', day: 25, description: 'Aluguel', value: 1512, category: 'Aluguel' },
+  { key: 'baba-2', day: 25, description: 'Babá - 2ª quinzena', value: 756, category: 'Babá' },
+  { key: 'angela', day: 25, description: 'Ângela', value: 1200, category: 'Família' },
+  { key: 'marleide', day: 25, description: 'Marleide', value: 1200, category: 'Família' },
+  { key: 'mae', day: 25, description: 'Mãe', value: 1200, category: 'Família' },
+  { key: 'gaby-contas', day: 25, description: 'Gaby contas', value: 700, category: 'Gaby' },
+  { key: 'aluguel-grazy', day: 25, description: 'Aluguel de Grazy', value: 1000, category: 'Aluguel' },
+  { key: 'escola-joao', day: 26, description: 'Escola João Miguel', value: 1600, category: 'Escola' },
+  { key: 'pos-graduacao', day: 27, description: 'Pós-graduação', value: 650, category: 'Escola' }
+];
+const INSTALLMENT_RULES = [
+  { key: 'carro', day: 1, description: 'Parcela do carro', value: 2850, category: 'Dívidas', installments: 20 },
+  { key: 'ze-camilo', day: 10, description: 'Parcela Zé Camilo', value: 600, category: 'Dívidas', installments: 1 },
+  { key: 'naniel', day: 10, description: 'Parcela Naniel', value: 500, category: 'Dívidas', installments: 3 },
+  { key: 'matheus-rocha', day: 20, description: 'Parcela Matheus Rocha', value: 800, category: 'Dívidas', installments: 3 },
+  { key: 'joias', day: 25, description: 'Parcela Joias', value: 565, category: 'Dívidas', installments: 2 }
 ];
 
 function setup() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   ensureSheet_(spreadsheet, TRANSACTIONS_SHEET, TRANSACTION_HEADERS);
   ensureSheet_(spreadsheet, DEBTS_SHEET, DEBT_HEADERS);
+  seedInstallmentDebts_();
   return 'Planilha configurada com sucesso.';
 }
 
 function doGet() {
   try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    ensureSheet_(spreadsheet, TRANSACTIONS_SHEET, TRANSACTION_HEADERS);
+    ensureSheet_(spreadsheet, DEBTS_SHEET, DEBT_HEADERS);
+    seedInstallmentDebts_();
+    syncAutomaticTransactions_();
     return jsonResponse_({
       success: true,
       transactions: readTransactions_(),
@@ -89,10 +133,11 @@ function addDebt_(data) {
     total: total,
     paid: paid,
     priority: ['high', 'medium', 'low'].includes(data.priority) ? data.priority : 'medium',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    installments: Math.max(0, Math.floor(Number(data.installments) || 0))
   };
   sheet_(DEBTS_SHEET).appendRow([
-    item.id, item.creditor, item.total, item.paid, item.priority, item.createdAt
+    item.id, item.creditor, item.total, item.paid, item.priority, item.createdAt, item.installments
   ]);
   return item;
 }
@@ -120,7 +165,8 @@ function readDebts_() {
       total: Number(row[2]) || 0,
       paid: Number(row[3]) || 0,
       priority: String(row[4]),
-      createdAt: Number(row[5]) || 0
+      createdAt: Number(row[5]) || 0,
+      installments: Math.max(0, Math.floor(Number(row[6]) || 0))
     };
   });
 }
@@ -130,12 +176,12 @@ function ensureSheet_(spreadsheet, name, headers) {
   if (!sheet) sheet = spreadsheet.insertSheet(name);
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
-    sheet.getRange(1, 1, 1, headers.length)
-      .setFontWeight('bold')
-      .setBackground('#0b1220')
-      .setFontColor('#ffffff');
-    sheet.setFrozenRows(1);
   }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight('bold')
+    .setBackground('#0b1220')
+    .setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
 }
 
 function sheet_(name) {
@@ -150,6 +196,78 @@ function dataRows_(name) {
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
     .getValues()
     .filter(function(row) { return row[0]; });
+}
+
+function syncAutomaticTransactions_() {
+  const transactionSheet = sheet_(TRANSACTIONS_SHEET);
+  const existingIds = new Set(dataRows_(TRANSACTIONS_SHEET).map(function(row) { return String(row[0]); }));
+  const start = parseIsoDate_(AUTOMATION_START);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const rows = [];
+
+  function queue(rule, date) {
+    if (date < start || date > today) return;
+    const iso = isoDate_(date);
+    const id = 'auto-' + rule.key + '-' + iso;
+    if (existingIds.has(id)) return;
+    rows.push([id, rule.type || 'expense', rule.description, rule.value, rule.category, iso, rule.payment || 'Outros', Date.now()]);
+    existingIds.add(id);
+  }
+
+  WEEKLY_RULES.forEach(function(rule) {
+    const date = new Date(start.getTime());
+    while (date.getDay() !== 1) date.setDate(date.getDate() + 1);
+    while (date <= today) {
+      queue(rule, new Date(date.getTime()));
+      date.setDate(date.getDate() + 7);
+    }
+  });
+
+  const month = new Date(start.getFullYear(), start.getMonth(), 1, 12);
+  while (month <= today) {
+    MONTHLY_RULES.forEach(function(rule) {
+      queue(rule, new Date(month.getFullYear(), month.getMonth(), rule.day, 12));
+    });
+    month.setMonth(month.getMonth() + 1);
+  }
+
+  INSTALLMENT_RULES.forEach(function(rule) {
+    for (let index = 0; index < rule.installments; index++) {
+      queue(rule, new Date(start.getFullYear(), start.getMonth() + index, rule.day, 12));
+    }
+  });
+
+  if (rows.length) {
+    transactionSheet.getRange(transactionSheet.getLastRow() + 1, 1, rows.length, TRANSACTION_HEADERS.length).setValues(rows);
+  }
+}
+
+function seedInstallmentDebts_() {
+  const definitions = [
+    { creditor: 'Carro', value: 2850, installments: 20, priority: 'medium' },
+    { creditor: 'Zé Camilo', value: 600, installments: 1, priority: 'high' },
+    { creditor: 'Naniel', value: 500, installments: 3, priority: 'high' },
+    { creditor: 'Joias', value: 565, installments: 2, priority: 'high' },
+    { creditor: 'Matheus Rocha', value: 800, installments: 3, priority: 'high' }
+  ];
+  const debtSheet = sheet_(DEBTS_SHEET);
+  const existing = new Set(dataRows_(DEBTS_SHEET).map(function(row) { return String(row[1]).toLowerCase(); }));
+  const rows = [];
+  definitions.forEach(function(item) {
+    if (existing.has(item.creditor.toLowerCase())) return;
+    rows.push([Utilities.getUuid(), item.creditor, item.value * item.installments, 0, item.priority, Date.now(), item.installments]);
+  });
+  if (rows.length) debtSheet.getRange(debtSheet.getLastRow() + 1, 1, rows.length, DEBT_HEADERS.length).setValues(rows);
+}
+
+function parseIsoDate_(iso) {
+  const parts = String(iso).split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2], 12);
+}
+
+function isoDate_(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone() || 'America/Sao_Paulo', 'yyyy-MM-dd');
 }
 
 function deleteRowById_(sheetName, id) {

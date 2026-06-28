@@ -139,6 +139,7 @@
               <div class="form-field"><label for="debtPaid">Valor pago</label><div class="money-input"><span>R$</span><input id="debtPaid" type="text" inputmode="decimal" placeholder="0,00" required></div></div>
             </div>
             <div class="form-field"><label for="debtPriority">Prioridade de negociação</label><select id="debtPriority" required><option value="">Selecione</option><option value="high">Alta — negociar primeiro</option><option value="medium">Média — acompanhar</option><option value="low">Baixa — pode aguardar</option></select></div>
+            <div class="form-field"><label for="debtInstallments">Parcelas restantes</label><input id="debtInstallments" type="number" min="0" step="1" placeholder="Ex.: 12"></div>
             <div class="debt-preview"><span>Saldo restante estimado</span><strong id="debtPreview">R$ 0,00</strong></div>
             <p class="form-message" id="debtMessage" role="alert" aria-live="polite"></p>
             <button class="primary-button debt-button" type="submit">＋ Adicionar dívida</button>
