@@ -13,6 +13,11 @@ exports.handler = async function (event) {
       redirect: 'follow'
     });
     const text = await upstream.text();
+    try {
+      JSON.parse(text);
+    } catch (error) {
+      return response(502, { success: false, message: 'O Google Apps Script retornou HTML. Confira a URL /exec e a permissão Qualquer pessoa.' });
+    }
     return {
       statusCode: upstream.status,
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },

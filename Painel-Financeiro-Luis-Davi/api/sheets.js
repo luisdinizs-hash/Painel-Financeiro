@@ -11,6 +11,11 @@ module.exports = async function handler(request, response) {
       redirect: 'follow'
     });
     const text = await upstream.text();
+    try {
+      JSON.parse(text);
+    } catch (error) {
+      return response.status(502).json({ success: false, message: 'O Google Apps Script retornou HTML. Confira a URL /exec e a permissão Qualquer pessoa.' });
+    }
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
     response.setHeader('Cache-Control', 'no-store');
     return response.status(upstream.status).send(text);

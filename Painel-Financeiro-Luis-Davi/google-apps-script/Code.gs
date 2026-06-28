@@ -105,7 +105,7 @@ function readTransactions_() {
       description: String(row[2]),
       value: Number(row[3]) || 0,
       category: String(row[4]),
-      date: normalizeDate_(row[5]),
+      date: normalizeDate_(row[5], row[7]),
       payment: String(row[6]),
       createdAt: Number(row[7]) || 0
     };
@@ -165,11 +165,29 @@ function deleteRowById_(sheetName, id) {
   throw new Error('Registro não encontrado.');
 }
 
-function normalizeDate_(value) {
-  if (value instanceof Date) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+function normalizeDate_(value, createdAt) {
+  const timeZone = Session.getScriptTimeZone() || 'America/Sao_Paulo';
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, timeZone, 'yyyy-MM-dd');
   }
-  return String(value).slice(0, 10);
+
+  const raw = String(value || '').trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+
+  const brazilian = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (brazilian) {
+    return brazilian[3] + '-' + ('0' + brazilian[2]).slice(-2) + '-' + ('0' + brazilian[1]).slice(-2);
+  }
+
+  const reference = new Date(Number(createdAt));
+  const referenceYear = isNaN(reference.getTime()) ? new Date().getFullYear() : reference.getFullYear();
+  const candidate = /\b\d{4}\b/.test(raw) ? raw : raw + ' ' + referenceYear;
+  const parsed = new Date(candidate);
+  if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, timeZone, 'yyyy-MM-dd');
+
+  const fallback = isNaN(reference.getTime()) ? new Date() : reference;
+  return Utilities.formatDate(fallback, timeZone, 'yyyy-MM-dd');
 }
 
 function validateRequired_(data, fields) {

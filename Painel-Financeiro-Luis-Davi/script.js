@@ -13,7 +13,12 @@ async function apiRequest(action,data={}){
   const options=action==='list'?{method:'GET',cache:'no-store'}:{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data})};
   const response=await fetch(action==='list'?`${API_URL}?t=${Date.now()}`:API_URL,options);
   if(!response.ok)throw new Error(`Falha na comunicação com a planilha (${response.status}).`);
-  const result=await response.json();
+  const responseText=await response.text();
+  let result;
+  try{result=JSON.parse(responseText)}catch{
+    if(responseText.trim().startsWith('<'))throw new Error('A função da Netlify não foi encontrada ou o Google Apps Script exige login. Verifique a publicação da função e a URL /exec.');
+    throw new Error('A nuvem retornou uma resposta inválida.');
+  }
   if(!result.success)throw new Error(result.message||'A planilha recusou a operação.');
   return result;
 }
@@ -22,7 +27,8 @@ async function loadCloudData(showMessage=false){
   isSyncing=true;setCloudStatus('syncing','Sincronizando');
   try{
     const result=await apiRequest('list');
-    transactions=Array.isArray(result.transactions)?result.transactions:[];
+    transactions=Array.isArray(result.transactions)?result.transactions.map(normalizeTransaction).filter(item=>item.data):[];
+    ensureTransactionYears();
     debts=Array.isArray(result.debts)?result.debts:[];
     render();renderDebts();setCloudStatus('online','Nuvem atualizada');
     if(showMessage)toast('Dados atualizados pela planilha.');
@@ -30,18 +36,30 @@ async function loadCloudData(showMessage=false){
   finally{isSyncing=false}
 }
 function money(text){const clean=text.trim().replace(/\s|R\$/gi,'');if(!clean)return NaN;return Number(clean.includes(',')?clean.replace(/\./g,'').replace(',','.'):clean)}
-function dateBR(date){const [y,m,d]=date.split('-');return`${d}/${m}/${y}`}
+function normalizeDate(value,createdAt){
+  if(!value)return'';
+  const raw=String(value).trim();
+  const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);if(iso)return`${iso[1]}-${iso[2]}-${iso[3]}`;
+  const brazilian=raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(brazilian)return`${brazilian[3]}-${brazilian[2].padStart(2,'0')}-${brazilian[1].padStart(2,'0')}`;
+  const timestamp=Number(createdAt),reference=new Date(timestamp),referenceYear=Number.isNaN(reference.getTime())?new Date().getFullYear():reference.getFullYear();
+  const withYear=/\b\d{4}\b/.test(raw)?raw:`${raw} ${referenceYear}`;
+  const parsed=new Date(withYear);if(Number.isNaN(parsed.getTime()))return'';
+  return`${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
+}
+function normalizeTransaction(item){const criadoEm=Number(item.criadoEm??item.createdAt)||0;return{id:String(item.id||''),tipo:item.tipo??item.type,descricao:String(item.descricao??item.description??''),valor:Number(item.valor??item.value)||0,categoria:String(item.categoria??item.category??'Outros'),data:normalizeDate(item.data??item.date,criadoEm),formaPagamento:String(item.formaPagamento??item.payment??'Outros'),criadoEm}}
+function dateBR(date){const [y,m,d]=String(date||'').split('-');return y&&m&&d?`${d}/${m}/${y}`:'Data inválida'}
+function ensureTransactionYears(){const current=el.year.value,existing=new Set([...el.year.options].map(option=>option.value));transactions.forEach(item=>{const year=item.data.slice(0,4);if(/^\d{4}$/.test(year)&&!existing.has(year)){el.year.add(new Option(year,year));existing.add(year)}});if([...el.year.options].some(option=>option.value===current))el.year.value=current}
 function safe(value){const div=document.createElement('div');div.textContent=String(value);return div.innerHTML}
 function selectedPeriod(){return`${el.year.value}-${el.month.value}`}
-function monthItems(){return transactions.filter(item=>item.date.slice(0,7)===selectedPeriod())}
-function filtered(){const query=el.search.value.trim().toLocaleLowerCase('pt-BR');return monthItems().filter(item=>!query||[item.description,item.category,item.payment,item.type==='income'?'receita':'despesa'].some(field=>field.toLocaleLowerCase('pt-BR').includes(query))).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt)}
+function monthItems(){return transactions.filter(item=>item.data.slice(0,7)===selectedPeriod())}
+function filtered(){const query=el.search.value.trim().toLocaleLowerCase('pt-BR');return monthItems().filter(item=>!query||[item.descricao,item.categoria,item.formaPagamento,item.tipo==='income'?'receita':'despesa'].some(field=>field.toLocaleLowerCase('pt-BR').includes(query))).sort((a,b)=>b.data.localeCompare(a.data)||b.criadoEm-a.criadoEm)}
 
 function updateProgress(goal,saved,bar,label){const percent=Math.min(100,saved/goal*100);bar.style.width=`${percent}%`;label.textContent=percent>=100?'Meta alcançada!':`${percent.toLocaleString('pt-BR',{maximumFractionDigits:1})}% alcançado`}
-function renderSummary(){const items=monthItems(),income=items.filter(i=>i.type==='income').reduce((s,i)=>s+i.value,0),expense=items.filter(i=>i.type==='expense').reduce((s,i)=>s+i.value,0),balance=income-expense,saved=Math.max(0,balance);el.income.textContent=currency.format(income);el.expense.textContent=currency.format(expense);el.balance.textContent=currency.format(balance);el.balance.classList.toggle('negative',balance<0);el.goal15.textContent=currency.format(Math.max(0,15000-saved));el.goal20.textContent=currency.format(Math.max(0,20000-saved));updateProgress(15000,saved,el.bar15,el.label15);updateProgress(20000,saved,el.bar20,el.label20)}
-function renderList(){const items=filtered();el.list.innerHTML=items.map(item=>{const income=item.type==='income';return`<tr><td>${dateBR(item.date)}</td><td class="description-cell" title="${safe(item.description)}">${safe(item.description)}</td><td>${safe(item.category)}</td><td>${safe(item.payment)}</td><td><span class="type-badge ${income?'income':'expense'}">${income?'Receita':'Despesa'}</span></td><td class="value-cell ${income?'income-value':'expense-value'}">${income?'+':'−'} ${currency.format(item.value)}</td><td><button class="delete-button" type="button" data-delete-id="${item.id}" title="Excluir lançamento" aria-label="Excluir ${safe(item.description)}">×</button></td></tr>`}).join('');el.empty.hidden=items.length>0;el.list.closest('table').hidden=items.length===0;el.count.textContent=items.length?`${items.length} ${items.length===1?'lançamento encontrado':'lançamentos encontrados'}`:'Nenhum lançamento neste período'}
+function renderSummary(){const items=monthItems(),income=items.filter(i=>i.tipo==='income').reduce((s,i)=>s+i.valor,0),expense=items.filter(i=>i.tipo==='expense').reduce((s,i)=>s+i.valor,0),balance=income-expense,saved=Math.max(0,balance);el.income.textContent=currency.format(income);el.expense.textContent=currency.format(expense);el.balance.textContent=currency.format(balance);el.balance.classList.toggle('negative',balance<0);el.goal15.textContent=currency.format(Math.max(0,15000-saved));el.goal20.textContent=currency.format(Math.max(0,20000-saved));updateProgress(15000,saved,el.bar15,el.label15);updateProgress(20000,saved,el.bar20,el.label20)}
+function renderList(){const items=filtered();el.list.innerHTML=items.map(item=>{const income=item.tipo==='income';return`<tr><td>${dateBR(item.data)}</td><td class="description-cell" title="${safe(item.descricao)}">${safe(item.descricao)}</td><td>${safe(item.categoria)}</td><td>${safe(item.formaPagamento)}</td><td><span class="type-badge ${income?'income':'expense'}">${income?'Receita':'Despesa'}</span></td><td class="value-cell ${income?'income-value':'expense-value'}">${income?'+':'−'} ${currency.format(item.valor)}</td><td><button class="delete-button" type="button" data-delete-id="${item.id}" title="Excluir lançamento" aria-label="Excluir ${safe(item.descricao)}">×</button></td></tr>`}).join('');el.empty.hidden=items.length>0;el.list.closest('table').hidden=items.length===0;el.count.textContent=items.length?`${items.length} ${items.length===1?'lançamento encontrado':'lançamentos encontrados'}`:'Nenhum lançamento neste período'}
 function renderChart(){
   const colors=['#1667ff','#18c8c8','#8069e9','#ef5261','#f5b83d','#10b981','#ee7c36','#db4ec5','#4f7f9d','#8fb43d','#5367d5','#cf6d8d','#8592a6'];
-  const grouped=monthItems().filter(item=>item.type==='expense').reduce((result,item)=>{result[item.category]=(result[item.category]||0)+item.value;return result},{});
+  const grouped=monthItems().filter(item=>item.tipo==='expense').reduce((result,item)=>{result[item.categoria]=(result[item.categoria]||0)+item.valor;return result},{});
   const data=Object.entries(grouped).sort((a,b)=>b[1]-a[1]);
   const total=data.reduce((sum,item)=>sum+item[1],0);
   el.chartTotal.textContent=currency.format(total);
@@ -68,12 +86,12 @@ function renderDebts(){
   el.debtEmpty.hidden=sorted.length>0;el.debtList.hidden=sorted.length===0;el.debtCount.textContent=sorted.length?`${sorted.length} ${sorted.length===1?'dívida cadastrada':'dívidas cadastradas'}`:'Nenhuma dívida cadastrada';
 }
 function renderInsights(){
-  const items=monthItems(),income=items.filter(item=>item.type==='income').reduce((sum,item)=>sum+item.value,0),expenses=items.filter(item=>item.type==='expense'),expenseTotal=expenses.reduce((sum,item)=>sum+item.value,0),balance=income-expenseTotal;
+  const items=monthItems(),income=items.filter(item=>item.tipo==='income').reduce((sum,item)=>sum+item.valor,0),expenses=items.filter(item=>item.tipo==='expense'),expenseTotal=expenses.reduce((sum,item)=>sum+item.valor,0),balance=income-expenseTotal;
   const fixedCategories=new Set(['aluguel','babá','escola','dívidas']);
-  const isVariable=item=>!fixedCategories.has(item.category.toLocaleLowerCase('pt-BR'));
-  const variable=expenses.filter(isVariable).reduce((sum,item)=>sum+item.value,0),variableRatio=income?variable/income:0;
+  const isVariable=item=>!fixedCategories.has(item.categoria.toLocaleLowerCase('pt-BR'));
+  const variable=expenses.filter(isVariable).reduce((sum,item)=>sum+item.valor,0),variableRatio=income?variable/income:0;
   const selectedDate=new Date(Number(el.year.value),Number(el.month.value)-2,1),previousPeriod=`${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,'0')}`;
-  const previousVariable=transactions.filter(item=>item.type==='expense'&&item.date.slice(0,7)===previousPeriod&&isVariable(item)).reduce((sum,item)=>sum+item.value,0);
+  const previousVariable=transactions.filter(item=>item.tipo==='expense'&&item.data.slice(0,7)===previousPeriod&&isVariable(item)).reduce((sum,item)=>sum+item.valor,0);
   const saved=Math.max(0,balance),impact15=Math.min(100,saved/15000*100),impact20=Math.min(100,saved/20000*100),monthName=el.month.options[el.month.selectedIndex]?.text||'';
   let level='neutral',status='Aguardando dados';
   if(items.length){if(balance<=0){level='danger';status='Atenção necessária'}else if(variableRatio>0.5){level='warning';status='Gastos elevados'}else{level='good';status='Mês sob controle'}}
@@ -100,13 +118,13 @@ el.form.addEventListener('submit',async event=>{
   const button=el.form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Salvando na nuvem...';
   try{
     const payload={type,description:el.description.value.trim(),value,category:el.category.value,date:el.date.value,payment:el.payment.value};
-    const result=await apiRequest('addTransaction',{data:payload});transactions.push(result.data);
-    el.year.value=payload.date.slice(0,4);el.month.value=payload.date.slice(5,7);el.form.reset();$('input[name="type"][value="income"]').checked=true;el.date.value=localDate();render();el.description.focus();setCloudStatus('online','Nuvem atualizada');toast('Lançamento salvo na planilha.');
+    await apiRequest('addTransaction',{data:payload});
+    el.year.value=payload.date.slice(0,4);el.month.value=payload.date.slice(5,7);el.form.reset();$('input[name="type"][value="income"]').checked=true;el.date.value=localDate();await loadCloudData();el.description.focus();toast('Lançamento salvo e dados atualizados.');
   }catch(error){el.message.textContent=error.message;setCloudStatus('offline','Falha ao salvar')}
   finally{button.disabled=false;button.textContent='＋ Adicionar lançamento'}
 });
-el.list.addEventListener('click',async event=>{const button=event.target.closest('[data-delete-id]');if(!button)return;const item=transactions.find(i=>i.id===button.dataset.deleteId);if(!item||!confirm(`Excluir o lançamento “${item.description}”?`))return;button.disabled=true;try{await apiRequest('deleteTransaction',{id:item.id});transactions=transactions.filter(i=>i.id!==item.id);render();toast('Lançamento excluído da planilha.')}catch(error){button.disabled=false;toast(error.message)}});
-el.export.addEventListener('click',()=>{const items=filtered();if(!items.length){toast('Não há lançamentos para exportar neste período.');return}const quote=value=>`"${String(value).replace(/"/g,'""')}"`,rows=[['Data','Descrição','Categoria','Forma de pagamento','Tipo','Valor'],...items.map(i=>[dateBR(i.date),i.description,i.category,i.payment,i.type==='income'?'Receita':'Despesa',i.value.toFixed(2).replace('.',',')])],csv='\uFEFF'+rows.map(row=>row.map(quote).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),link=document.createElement('a');link.href=url;link.download=`lancamentos-${selectedPeriod()}.csv`;link.click();URL.revokeObjectURL(url);toast('Arquivo CSV exportado.')});
+el.list.addEventListener('click',async event=>{const button=event.target.closest('[data-delete-id]');if(!button)return;const item=transactions.find(i=>i.id===button.dataset.deleteId);if(!item||!confirm(`Excluir o lançamento “${item.descricao}”?`))return;button.disabled=true;try{await apiRequest('deleteTransaction',{id:item.id});await loadCloudData();toast('Lançamento excluído da planilha.')}catch(error){button.disabled=false;toast(error.message)}});
+el.export.addEventListener('click',()=>{const items=filtered();if(!items.length){toast('Não há lançamentos para exportar neste período.');return}const quote=value=>`"${String(value).replace(/"/g,'""')}"`,rows=[['Data','Descrição','Categoria','Forma de pagamento','Tipo','Valor'],...items.map(i=>[dateBR(i.data),i.descricao,i.categoria,i.formaPagamento,i.tipo==='income'?'Receita':'Despesa',i.valor.toFixed(2).replace('.',',')])],csv='\uFEFF'+rows.map(row=>row.map(quote).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),link=document.createElement('a');link.href=url;link.download=`lancamentos-${selectedPeriod()}.csv`;link.click();URL.revokeObjectURL(url);toast('Arquivo CSV exportado.')});
 
 el.debtForm.addEventListener('submit',async event=>{event.preventDefault();el.debtMessage.textContent='';const total=money(el.debtTotal.value),paid=money(el.debtPaid.value);if(!el.creditor.value.trim()||!el.debtPriority.value||!Number.isFinite(total)||!Number.isFinite(paid)){el.debtMessage.textContent='Preencha todos os campos com valores válidos.';return}if(total<=0||paid<0){el.debtMessage.textContent='O valor total deve ser maior que zero e o pago não pode ser negativo.';return}if(paid>total){el.debtMessage.textContent='O valor pago não pode ser maior que o valor total.';return}const button=el.debtForm.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Salvando na nuvem...';try{const payload={creditor:el.creditor.value.trim(),total,paid,priority:el.debtPriority.value};const result=await apiRequest('addDebt',{data:payload});debts.push(result.data);el.debtForm.reset();el.debtPaid.value='0,00';updateDebtPreview();renderDebts();el.creditor.focus();toast('Dívida salva na planilha.')}catch(error){el.debtMessage.textContent=error.message}finally{button.disabled=false;button.textContent='＋ Adicionar dívida'}});
 el.debtList.addEventListener('click',async event=>{const button=event.target.closest('[data-delete-debt]');if(!button)return;const item=debts.find(debt=>debt.id===button.dataset.deleteDebt);if(!item||!confirm(`Excluir a dívida de “${item.creditor}”?`))return;button.disabled=true;try{await apiRequest('deleteDebt',{id:item.id});debts=debts.filter(debt=>debt.id!==item.id);renderDebts();toast('Dívida excluída da planilha.')}catch(error){button.disabled=false;toast(error.message)}});
