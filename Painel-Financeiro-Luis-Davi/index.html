@@ -60,6 +60,14 @@
       <div id="monthlyRecommendation" class="monthly-recommendation"><span aria-hidden="true">✦</span><p><strong>Recomendação do mês:</strong> registre receitas e despesas para gerar uma orientação personalizada.</p></div>
     </section>
 
+    <section class="panel automation-panel dashboard-section">
+      <div class="automation-header">
+        <div><p class="section-label">AGENDA AUTOMÁTICA</p><h2>Receitas e contas programadas</h2><p>Os lançamentos entram na tabela somente quando a data programada chega.</p></div>
+        <span class="automation-note">Início: julho de 2026</span>
+      </div>
+      <div id="automationList" class="automation-list"><p class="automation-loading">Carregando programação...</p></div>
+    </section>
+
     <section class="content-grid dashboard-section">
       <article class="panel form-panel">
         <div class="panel-heading"><div><p class="section-label">NOVO REGISTRO</p><h2>Adicionar lançamento</h2></div><div class="heading-icon">＋</div></div>
@@ -143,6 +151,7 @@
             <div class="debt-preview"><span>Saldo restante estimado</span><strong id="debtPreview">R$ 0,00</strong></div>
             <p class="form-message" id="debtMessage" role="alert" aria-live="polite"></p>
             <button class="primary-button debt-button" type="submit">＋ Adicionar dívida</button>
+            <button id="cancelDebtEdit" class="secondary-button cancel-edit-button" type="button" hidden>Cancelar edição</button>
           </form>
         </article>
 

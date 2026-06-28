@@ -65,7 +65,8 @@ function doGet() {
     return jsonResponse_({
       success: true,
       transactions: readTransactions_(),
-      debts: readDebts_()
+      debts: readDebts_(),
+      automations: getAutomationRules_()
     });
   } catch (error) {
     return jsonResponse_({ success: false, message: error.message });
@@ -87,6 +88,12 @@ function doPost(event) {
         break;
       case 'addDebt':
         result = addDebt_(body.data);
+        break;
+      case 'updateDebt':
+        result = updateDebt_(body.id, body.data);
+        break;
+      case 'payDebt':
+        result = payDebt_(body.id);
         break;
       case 'deleteDebt':
         deleteRowById_(DEBTS_SHEET, body.id);
@@ -140,6 +147,40 @@ function addDebt_(data) {
     item.id, item.creditor, item.total, item.paid, item.priority, item.createdAt, item.installments
   ]);
   return item;
+}
+
+function updateDebt_(id, data) {
+  validateRequired_(data, ['creditor', 'total', 'paid', 'priority']);
+  const total = positiveNumber_(data.total, 'valor total');
+  const paid = nonNegativeNumber_(data.paid, 'valor pago');
+  if (paid > total) throw new Error('O valor pago não pode superar o valor total.');
+  const location = findRowById_(DEBTS_SHEET, id);
+  const createdAt = Number(location.values[5]) || Date.now();
+  const item = {
+    id: String(id), creditor: String(data.creditor).trim(), total: total, paid: paid,
+    priority: ['high', 'medium', 'low'].includes(data.priority) ? data.priority : 'medium',
+    createdAt: createdAt, installments: Math.max(0, Math.floor(Number(data.installments) || 0))
+  };
+  location.sheet.getRange(location.row, 1, 1, DEBT_HEADERS.length).setValues([[
+    item.id, item.creditor, item.total, item.paid, item.priority, item.createdAt, item.installments
+  ]]);
+  return item;
+}
+
+function payDebt_(id) {
+  const location = findRowById_(DEBTS_SHEET, id);
+  const total = Number(location.values[2]) || 0;
+  const paid = Number(location.values[3]) || 0;
+  const installments = Math.max(0, Math.floor(Number(location.values[6]) || 0));
+  const balance = Math.max(0, total - paid);
+  if (balance <= 0) throw new Error('Esta dívida já está quitada.');
+  if (installments <= 0) throw new Error('Informe as parcelas restantes antes de registrar o pagamento.');
+  const installmentValue = balance / installments;
+  const newPaid = Math.min(total, paid + installmentValue);
+  const newInstallments = Math.max(0, installments - 1);
+  location.sheet.getRange(location.row, 4).setValue(newPaid);
+  location.sheet.getRange(location.row, 7).setValue(newInstallments);
+  return { id: String(id), paid: newPaid, installments: newInstallments };
 }
 
 function readTransactions_() {
@@ -243,7 +284,23 @@ function syncAutomaticTransactions_() {
   }
 }
 
+function getAutomationRules_() {
+  const rules = [];
+  WEEKLY_RULES.forEach(function(rule) {
+    rules.push({ type: rule.type, description: rule.description, value: rule.value, schedule: 'Toda segunda-feira', category: rule.category });
+  });
+  MONTHLY_RULES.forEach(function(rule) {
+    rules.push({ type: 'expense', description: rule.description, value: rule.value, schedule: 'Dia ' + rule.day, category: rule.category });
+  });
+  INSTALLMENT_RULES.forEach(function(rule) {
+    rules.push({ type: 'expense', description: rule.description, value: rule.value, schedule: 'Dia ' + rule.day + ' · ' + rule.installments + ' parcelas', category: rule.category });
+  });
+  return rules;
+}
+
 function seedInstallmentDebts_() {
+  const properties = PropertiesService.getScriptProperties();
+  if (properties.getProperty('FINANCIAL_BASE_DEBTS_SEEDED') === 'true') return;
   const definitions = [
     { creditor: 'Carro', value: 2850, installments: 20, priority: 'medium' },
     { creditor: 'Zé Camilo', value: 600, installments: 1, priority: 'high' },
@@ -259,6 +316,7 @@ function seedInstallmentDebts_() {
     rows.push([Utilities.getUuid(), item.creditor, item.value * item.installments, 0, item.priority, Date.now(), item.installments]);
   });
   if (rows.length) debtSheet.getRange(debtSheet.getLastRow() + 1, 1, rows.length, DEBT_HEADERS.length).setValues(rows);
+  properties.setProperty('FINANCIAL_BASE_DEBTS_SEEDED', 'true');
 }
 
 function parseIsoDate_(iso) {
@@ -268,6 +326,16 @@ function parseIsoDate_(iso) {
 
 function isoDate_(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone() || 'America/Sao_Paulo', 'yyyy-MM-dd');
+}
+
+function findRowById_(sheetName, id) {
+  if (!id) throw new Error('ID não informado.');
+  const sheet = sheet_(sheetName);
+  const values = sheet.getDataRange().getValues();
+  for (let index = 1; index < values.length; index++) {
+    if (String(values[index][0]) === String(id)) return { sheet: sheet, row: index + 1, values: values[index] };
+  }
+  throw new Error('Registro não encontrado.');
 }
 
 function deleteRowById_(sheetName, id) {
